@@ -132,7 +132,7 @@ def create_csv_year(year, tourney_type, copy_flag=True):
                       "Score",
                       "Tournament",
                       "Tournament Code",
-                      "Tournament Pretty Name"
+                      "Tournament Pretty Name",
                       "Year",
                       "Type"]
             data_writer.writerow(header)
