@@ -4,3 +4,12 @@ bs4
 logging
 unicodecsv
 errno
+snap
+seaborn
+matplotlib
+glob
+copy
+numpy
+prettytable
+mpmath
+powerlaw
