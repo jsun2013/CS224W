@@ -7,6 +7,38 @@ import numpy as np
 from prettytable import PrettyTable
 import mpmath
 import powerlaw
+from collections import defaultdict
+import os
+
+def create_net_file(df, fname, min_year, max_year):
+    players = set()
+    edges = defaultdict(int)
+    for _, row in df[(df['year'] <= max_year) & (df['year'] >= min_year)].iterrows():
+        if len(row['loser_name']) > 0 and len(row['winner_name']) > 0:
+            players.add(row['loser_name'])
+            players.add(row['winner_name'])
+            edges[(row['loser_name'], row['winner_name'])] += 1
+    players = list(players)
+    id2names = {}
+    names2id = {}
+    for i, name in enumerate(players):
+        id2names[i + 1] = name
+        names2id[name] = i + 1
+    if not os.path.isfile(fname+".net"):
+        with open(fname+".net", "w+") as f:
+            f.write("*Vertices {}\n".format(len(players)))
+            for name in players:
+                f.write("{} \"{}\" 1.0\n".format(names2id[name], name))
+            f.write("*Arcs {}\n".format(len(edges.keys())))
+            for e in edges:
+                name1, name2 = e
+                id1 = names2id[name1]
+                id2 = names2id[name2]
+                f.write("{} {} {}\n".format(id1, id2, edges[e]))
+        return True
+    return False
+
+
 
 
 def read_alt_files(fglob):
