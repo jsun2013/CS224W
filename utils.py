@@ -109,13 +109,61 @@ def get_deg_data(G):
         deg_data.append(result_degree[i])
     return deg_data
 
+def plot_both(beta, alpha, xmin, Lambda_a, Lambda_b, pdf, ccdf, degs, title=None):
+    C = beta * Lambda_b * np.exp(Lambda_b * xmin ** beta)
+    pdf_hat = degs[degs >= xmin] ** (beta - 1) * np.exp(-Lambda_b * degs[degs >= xmin] ** beta) * C
+    fig = plt.figure(figsize=(12, 9))
+    ax = fig.add_subplot(111)
+    ax.scatter(degs, pdf, marker='o', label='True', color=sns.xkcd_rgb["deep blue"])
+    ax.plot(degs[degs >= xmin], pdf_hat, marker='*', label='Stretched', color=sns.xkcd_rgb["pale red"])
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylabel('Proportion')
+    ax.set_xlabel('Degree')
 
-def plot_fit(alpha, Lambda, xmin, pdf, ccdf, degs, title=None):
+    C = Lambda_a ** (1 - alpha) / (mpmath.gammainc(1 - alpha, Lambda_a * xmin))
+    pdf_hat = degs[degs >= xmin] ** -alpha * np.exp(-Lambda_a * degs[degs >= xmin]) * C
+    ax.plot(degs[degs >= xmin], pdf_hat, marker='D', label='Truncated', color=sns.xkcd_rgb["medium green"])
+    if title:
+        ax.set_title(title)
+    ax.legend()
+    plt.show()
+
+def plot_stretched(beta, Lambda, xmin, pdf, ccdf, degs, title=None, ax=None):
+    C = beta*Lambda *np.exp(Lambda*xmin**beta)
+    pdf_hat = degs[degs>=xmin] **(beta-1) * np.exp(-Lambda * degs[degs>=xmin]**beta) * C
+    ccdf_hat = 1 - np.cumsum(pdf_hat)
+
+    fig = plt.figure(figsize=(12, 9))
+    if not ax:
+        ax = fig.add_subplot(111)
+    else:
+        fig.axes.append(ax)
+    ax.scatter(degs, pdf, marker='o', label='True', color=sns.xkcd_rgb["deep blue"])
+    ax.plot(degs[degs>=xmin], pdf_hat, marker='*', label='Fit', color=sns.xkcd_rgb["pale red"])
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_ylabel('Proportion')
+    ax.set_xlabel('Degree')
+    if title:
+        ax.set_title(title)
+    ax.legend()
+
+    plot_text_x = 10**(np.mean(np.log10(ax.get_xlim())))
+    plot_text_y = plot_text_x ** (beta-1) * np.exp(-Lambda * plot_text_x) * C
+    ax.annotate(r'$\beta=%.2f$, $\lambda=%.2g$, ' % (beta, Lambda), xy=(plot_text_x, plot_text_y), color=sns.xkcd_rgb["pale red"]
+                )
+
+    plt.show()
+    return ax
+
+def plot_fit(alpha, Lambda, xmin, pdf, ccdf, degs, title=None, ax=None):
     C = Lambda ** (1 - alpha) / (mpmath.gammainc(1 - alpha, Lambda * xmin))
     pdf_hat = degs[degs>=xmin] ** -alpha * np.exp(-Lambda * degs[degs>=xmin]) * C
     ccdf_hat = 1 - np.cumsum(pdf_hat)
-    fig = plt.figure(figsize=(12, 9))
-    ax = fig.add_subplot(111)
+    if not ax:
+        fig = plt.figure(figsize=(12, 9))
+        ax = fig.add_subplot(111)
     ax.scatter(degs, pdf, marker='o', label='True', color=sns.xkcd_rgb["deep blue"])
     ax.plot(degs[degs>=xmin], pdf_hat, marker='*', label='Fit', color=sns.xkcd_rgb["pale red"])
     ax.set_xscale('log')
@@ -128,14 +176,14 @@ def plot_fit(alpha, Lambda, xmin, pdf, ccdf, degs, title=None):
 
     plot_text_x = 10**(np.mean(np.log10(ax.get_xlim())))
     plot_text_y = plot_text_x ** -alpha * np.exp(-Lambda * plot_text_x) * C
-    ax.annotate(r'$\alpha=%.2f$, $\lambda=%.2f$, ' % (alpha, Lambda), xy=(plot_text_x, plot_text_y), color=sns.xkcd_rgb["pale red"]
+    ax.annotate(r'$\alpha=%.2f$, $\lambda=%.2g$, ' % (alpha, Lambda), xy=(plot_text_x, plot_text_y), color=sns.xkcd_rgb["pale red"]
                 )
 
     plt.show()
 
 
 def print_fit_results(data, discrete=False):
-    results = powerlaw.Fit(data, discrete=discrete)
+    results = powerlaw.Fit(data,xmin=2, discrete=discrete)
     t = PrettyTable(['', 'power', 'lognormal', 'exponential', 'power with cutoff', 'stretched exponential'])
     print("alpha: {}".format(results.power_law.alpha))
     print("x_min: {}".format(results.power_law.xmin))
@@ -152,6 +200,85 @@ def print_fit_results(data, discrete=False):
         t.add_row(row)
     print(t)
 
+def print_fit_results_tex(data, discrete=True, xmin=2):
+    results = powerlaw.Fit(data, discrete=discrete,xmin=None)
+    print("alpha: {}".format(results.power_law.alpha))
+    print("x_min: {}".format(results.power_law.xmin))
+    print("Number of Data Points: {}".format(len(data)))
+
+    dists = ['power_law', 'lognormal_positive', 'exponential', 'truncated_power_law', 'stretched_exponential']
+    names = ['Power', 'Log-Normal', 'Exp', 'Cutoff', 'Stretched']
+
+    print()
+    print()
+    print("\\begin{table}[h]")
+    print("\\centering")
+    print("\\begin{tabular}{|c||c|c||c|c||c|c||c|c||c|c|}")
+    print("\\hline")
+    title = ""
+    for name in names:
+        title += " & \\multicolumn{2}{c||}{" + name + "}"
+    title += "\\\\"
+    print(title)
+    print("\\cline{2-11}")
+    print(" & LR & p-val"*5 + "\\\\\\hline" )
+
+    for i, name in enumerate(names):
+        dist = dists[i]
+        row = name
+        for j in range(len(dists)):
+            R, p = results.distribution_compare(dist, dists[j])
+            row += "&"
+            if i == j:
+                row += "-&-"
+            else:
+                row += '{:.2f}&{:.2f}'.format(R, p)
+        row += "\\\\\\hline"
+        print(row)
+    print("\\end{tabular}")
+
+def fit_stretched(data, discrete=True, calc_p=False, manual_xmin=None):
+    results = powerlaw.Fit(data, discrete=discrete)
+    if manual_xmin:
+        xmin = manual_xmin
+    else:
+        xmin = results.xmin
+
+    dist = powerlaw.Stretched_Exponential(xmin=xmin, discrete=discrete)
+    dist.fit(data)
+    empirical_ks = dist.KS(data)
+    beta = dist.beta
+    Lambda = dist.Lambda
+    p_val = None
+
+    if calc_p:
+        num_synthetic = 1000
+        n = len(data)
+        n_tail = sum(data >= xmin)
+        p_tail = float(n_tail) / n
+        p_count = 0.0
+        for _ in range(num_synthetic):
+            test_set = []
+            for jjj in range(n):
+                if np.random.rand() > p_tail:
+                    x = np.random.choice(np.arange(0, xmin))
+                    test_set.append(x)
+                else:
+                    while True:
+                        r = np.random.rand()
+                        x = np.floor((xmin - 0.5) * (1 - r) ** (-1 / (alpha - 1)) + 0.5)
+                        p = (x / xmin) ** (-alpha)
+                        if np.random.rand() <= p:
+                            test_set.append(x)
+                            break
+            test_set = np.asarray(test_set)
+            test_dist = powerlaw.Truncated_Power_Law(xmin=xmin, discrete=discrete)
+            test_dist.fit(test_set)
+            if test_dist.KS(test_set) > empirical_ks:
+                p_count += 1
+        p_val = p_count / 1000
+
+    return dist.beta, dist.Lambda, results.xmin, p_val
 
 def fit_truncated(data, discrete=True, calc_p=False, manual_xmin=None):
     results = powerlaw.Fit(data, discrete=discrete)
@@ -273,6 +400,19 @@ def cumulative_get_densification(df):
     G = snap.TUNGraph.New()
     for year in years:
         add_df_to_G(df[df['year']==year], G)
+        out_num_nodes.append(G.GetNodes())
+        out_num_edges.append(G.GetEdges())
+        out_anf_diameters.append(snap.GetAnfEffDiam(G))
+    return out_num_nodes, out_num_edges, out_anf_diameters, years
+
+def directed_get_densification(df):
+    years = sorted(df['year'].unique())
+    out_num_nodes = []
+    out_num_edges = []
+    out_anf_diameters = []
+    G = snap.TNEANet.New()
+    for year in years:
+        add_df_to_G(df[df['year']==year], G, directed=True)
         out_num_nodes.append(G.GetNodes())
         out_num_edges.append(G.GetEdges())
         out_anf_diameters.append(snap.GetAnfEffDiam(G))
